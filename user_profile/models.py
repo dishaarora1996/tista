@@ -29,7 +29,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     """ Custom User Model """
 
     full_name = models.CharField(max_length=100, blank=True, null=True)
-    email= models.EmailField(max_length=100, unique=True)
+    email= models.EmailField(max_length=100, blank=True, null=True)
     gender = models.CharField(max_length=10, blank=True, null=True, choices=GENDER_CHOICES)
     phone_regex = RegexValidator(regex=r'^\d{10}$', message="Phone number must be 10 digits.")
     phone = models.CharField(validators=[phone_regex], max_length=10, unique=True)
@@ -48,7 +48,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     objects = CustomUserManager()
 
     def __str__(self):
-        return self.full_name
+        return str(self.phone)
 
 
 class BaseAbstractStructure(models.Model):
@@ -76,4 +76,8 @@ class OTP(models.Model):
     def is_valid(self):
         """Check if the OTP is still valid."""
         return timezone.now() < self.expires_at
+
+
+    def __str__(self):
+        return str(self.user.phone)
 
