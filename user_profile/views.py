@@ -1,11 +1,17 @@
+from django.contrib.auth import get_user_model
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.authtoken.models import Token
-from django.contrib.auth import get_user_model
-from .utils import generate_and_save_otp
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+from rest_framework import status
+from django.db import transaction
+from .serializers import *
+from .models import CustomUser
 from user_profile.models import *
+from .utils import generate_and_save_otp
 
 User = get_user_model()
 
@@ -112,13 +118,21 @@ class OTPVerificationAPIView(APIView):
         # Check if an OTP exists and is valid
         otp = OTP.objects.filter(user=user, otp_code=otp_code).first()
 
+
         if otp and otp.is_valid():
-            # Delete any existing token and create a new one
-            Token.objects.filter(user=user).delete()
-            token = Token.objects.create(user=user)
+            with transaction.atomic():
+                # Update user fields to mark as active and verified
+                user.is_active = True
+                user.is_verified = True
+                user.save()
+
+                # Delete any existing token and create a new one
+                Token.objects.filter(user=user).delete()
+                token = Token.objects.create(user=user)
+
             data = {
                 "phone": user.phone,
-                "otp": otp_code,
+                "token": token.key
             }
             response_data = {
                 'results': {
@@ -130,6 +144,7 @@ class OTPVerificationAPIView(APIView):
             }
             return Response(response_data, status=status.HTTP_200_OK)
 
+
         # OTP is invalid or expired
         return Response({
             'results': {
@@ -139,3 +154,48 @@ class OTPVerificationAPIView(APIView):
                 'status': 400
             }
         }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserProfileAPIView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # Serialize the authenticated user data
+        serializer = UserProfileSerializer(request.user)
+        data = {
+            'results': {
+                'Data': serializer.data,
+                'request_status': 1,
+                'msg': "User profile retrieved successfully",
+                'status': 200
+            }
+        }
+        return Response(data, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        serializer = UserProfileSerializer(instance=request.user, data=request.data)
+
+        if serializer.is_valid():
+            # Update the user's profile
+            serializer.save()
+            response_data = {
+                'results': {
+                    'Data': serializer.data,
+                    'request_status': 1,
+                    'msg': "Profile updated successfully",
+                    'status': 200
+                }
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        # If the data is invalid, return a 400 response with error details
+        response_data = {
+            'results': {
+                'Data': {},
+                'request_status': 0,
+                'msg': serializer.errors,
+                'status': 400
+            }
+        }
+        return Response(response_data, status=status.HTTP_400_BAD_REQUEST)

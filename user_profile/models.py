@@ -17,7 +17,7 @@ STATUS_CHOICES = [
 GENDER_CHOICES = [
     ('Male', 'Male'),
     ('Female', 'Female'),
-    ('Others', 'Others'),
+    ('Other', 'Other'),
 ]
 
 class CustomManager(models.Manager):
